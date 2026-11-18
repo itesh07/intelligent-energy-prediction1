@@ -7,18 +7,6 @@
   },
   "rewrites": [
     {
-      "source": "/static/css/:file",
-      "destination": "/public/static/css/:file"
-    },
-    {
-      "source": "/static/js/:file",
-      "destination": "/public/static/js/:file"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "/api/index.py"
-    },
-    {
       "source": "/(.*)",
       "destination": "/api/index.py"
     }
