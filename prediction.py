@@ -9,35 +9,53 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import joblib
 import numpy as np
 import pandas as pd
 
-from preprocessing import build_prediction_features
+from preprocessing import FEATURE_COLUMNS, build_prediction_features
+from train_model import (
+    MODEL_BUNDLE_PATH,
+    TEMP_MODEL_BUNDLE_PATH,
+    resolve_model_bundle_path,
+)
 
-BASE_DIR = Path(__file__).resolve().parent
-MODEL_BUNDLE_PATH = BASE_DIR / "models" / "energy_model_bundle.joblib"
 TARIFF_INR_PER_KWH = 7.50  # Commercial smart-building electricity tariff in INR (₹)
 
 
 class EnergyPredictor:
-    def __init__(self, bundle_path: str | Path = MODEL_BUNDLE_PATH):
-        self.bundle_path = Path(bundle_path)
+    def __init__(self, bundle_path: Optional[Union[str, Path]] = None):
+        self.custom_bundle_path = Path(bundle_path) if bundle_path else None
         self.bundle: Optional[Dict[str, Any]] = None
+        self.active_path: Optional[Path] = None
         self.load_model()
+
+    def set_bundle(self, bundle: Dict[str, Any]) -> None:
+        """Sets the active model bundle in memory directly without disk I/O."""
+        if bundle and "best_model" in bundle:
+            self.bundle = bundle
 
     def load_model(self) -> bool:
         """Loads or reloads the serialized model bundle from disk."""
-        if self.bundle_path.exists():
+        target_path: Optional[Path] = None
+
+        if self.custom_bundle_path and self.custom_bundle_path.exists():
+            target_path = self.custom_bundle_path
+        else:
+            target_path = resolve_model_bundle_path()
+
+        if target_path and target_path.exists():
             try:
-                self.bundle = joblib.load(self.bundle_path)
+                self.bundle = joblib.load(target_path)
+                self.active_path = target_path
                 return True
             except Exception as e:
-                print(f"[WattWise] Error loading model bundle: {e}")
+                print(f"[WattWise] Error loading model bundle from {target_path}: {e}")
                 self.bundle = None
                 return False
+
         self.bundle = None
         return False
 
@@ -47,7 +65,10 @@ class EnergyPredictor:
 
     def get_info(self) -> Dict[str, Any]:
         if not self.is_ready:
-            return {"status": "not_ready", "message": "ML model bundle has not been trained yet."}
+            return {
+                "status": "not_ready",
+                "message": "ML model bundle has not been trained yet. Please train the model in the dashboard or upload a dataset.",
+            }
         return {
             "status": "ready",
             "best_model_name": self.bundle["best_model_name"],
@@ -56,6 +77,7 @@ class EnergyPredictor:
             "feature_importance": self.bundle.get("feature_importance", {}),
             "trained_at": self.bundle.get("trained_at", "Unknown"),
             "tariff_per_kwh_inr": TARIFF_INR_PER_KWH,
+            "bundle_source": str(self.active_path) if self.active_path else "memory",
         }
 
     def predict(
@@ -69,10 +91,14 @@ class EnergyPredictor:
     ) -> Dict[str, Any]:
         """
         Executes prediction using the active machine learning model.
-        Returns predicted consumption (kWh), cost estimate (₹), and explainable breakdown.
+        Returns predicted consumption (kWh), cost estimate in INR (₹),
+        active model metadata, test set metrics, and explainable breakdown.
         """
         if not self.is_ready:
-            raise RuntimeError("Model is not loaded or trained. Please train the model first.")
+            raise RuntimeError(
+                "Machine learning model is not loaded or trained. "
+                "Please train the model first using 'Train AI Model' or upload a dataset."
+            )
 
         # Validate inputs
         try:
@@ -89,14 +115,14 @@ class EnergyPredictor:
             raise ValueError("Hour must be between 0 and 23.")
         if not (0 <= day_of_week <= 6):
             raise ValueError("Day of week must be between 0 (Monday) and 6 (Sunday).")
-        if not (-20.0 <= temperature <= 60.0):
-            raise ValueError("Temperature must be between -20°C and 60°C.")
+        if not (-25.0 <= temperature <= 65.0):
+            raise ValueError("Temperature must be between -25°C and 65°C.")
         if not (0.0 <= humidity <= 100.0):
             raise ValueError("Humidity must be between 0% and 100%.")
         if prev_energy_kwh < 0:
-            raise ValueError("Previous energy consumption must be non-negative.")
+            raise ValueError("Previous energy consumption must be non-negative (>= 0 kWh).")
 
-        # Construct feature vector
+        # Construct single-sample feature vector
         features_df = build_prediction_features(
             temperature=temperature,
             humidity=humidity,
@@ -116,14 +142,14 @@ class EnergyPredictor:
         X_input = scaler.transform(features_df) if (use_scaled and scaler) else features_df
 
         raw_pred = model.predict(X_input)[0]
-        # Physics guardrail: building power cannot be zero or negative
-        predicted_kwh = round(max(5.0, float(raw_pred)), 2)
+        # Physical guardrail: facility electrical consumption must be positive
+        predicted_kwh = round(max(1.0, float(raw_pred)), 2)
 
-        # Delta comparisons
+        # Difference against previous hour
         diff_kwh = round(predicted_kwh - prev_energy_kwh, 2)
         pct_change = round((diff_kwh / prev_energy_kwh) * 100, 1) if prev_energy_kwh > 0 else 0.0
 
-        # Cost calculation in INR (₹)
+        # Cost in INR (₹)
         estimated_cost_inr = round(predicted_kwh * TARIFF_INR_PER_KWH, 2)
 
         # Categorize load state
@@ -142,7 +168,7 @@ class EnergyPredictor:
         heating_deg = max(0.0, 18.0 - temperature)
         estimated_hvac = round((cooling_deg * 2.2) + (heating_deg * 1.5) + (occupancy * 0.08), 2)
         estimated_plug = round(occupancy * 0.16, 2)
-        base_load_est = round(max(15.0, predicted_kwh - estimated_hvac - estimated_plug), 2)
+        base_load_est = round(max(10.0, predicted_kwh - estimated_hvac - estimated_plug), 2)
 
         days_map = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 

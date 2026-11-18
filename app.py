@@ -4,20 +4,23 @@ Flask Application Server & REST API.
 
 Provides endpoints for:
 - Serving modern glassmorphic dashboard UI
-- CSV dataset upload, preview, and validation
+- In-memory CSV dataset upload, preview, and schema validation
 - Machine learning model training & chronological evaluation
 - Real-time energy consumption inference
 - Analytics telemetry for Chart.js visualizations
+- CORS support for decoupled Vercel (frontend) + Render (backend) deployments
 """
 
 from __future__ import annotations
 
+import io
 import json
 import os
+import tempfile
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -28,59 +31,97 @@ from prediction import EnergyPredictor, TARIFF_INR_PER_KWH
 from preprocessing import (
     generate_synthetic_building_dataset,
     parse_and_clean_data,
+    validate_and_clean_dataset,
 )
 from train_model import (
     DEFAULT_DEMO_PATH,
     MODEL_BUNDLE_PATH,
+    TEMP_MODEL_BUNDLE_PATH,
     ensure_demo_dataset,
+    resolve_model_bundle_path,
     train_pipeline,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = BASE_DIR / "uploads"
+TEMP_DIR = Path(tempfile.gettempdir())
 DATA_DIR = BASE_DIR / "data"
-ACTIVE_DATASET_CONFIG = DATA_DIR / "active_dataset.json"
+
+ACTIVE_DATASET_CONFIG = TEMP_DIR / "wattwise_active_dataset.json"
+ACTIVE_UPLOADED_CSV = TEMP_DIR / "wattwise_active_dataset.csv"
 ALLOWED_EXTENSIONS = {".csv"}
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
-app.config["UPLOAD_FOLDER"] = str(UPLOAD_DIR)
 
-# Ensure essential directories exist
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+# In-memory session state for active uploaded dataset (serverless-friendly)
+_ACTIVE_DATAFRAME: Optional[pd.DataFrame] = None
+_ACTIVE_DATASET_NAME: str = "demo_smart_building_energy.csv"
+_ACTIVE_VALIDATION_REPORT: Optional[Dict[str, Any]] = None
+_IS_SYNTHETIC: bool = True
 
 # Initialize predictor
-predictor = EnergyPredictor(bundle_path=MODEL_BUNDLE_PATH)
+predictor = EnergyPredictor(bundle_path=resolve_model_bundle_path())
 
 
-def get_active_dataset_path() -> Path:
-    """Returns the path to the currently active CSV dataset."""
-    if ACTIVE_DATASET_CONFIG.exists():
+# --------------------------------------------------------------------------
+# CORS & Serverless Headers
+# --------------------------------------------------------------------------
+@app.after_request
+def add_cors_headers(response):
+    """Allows cross-origin requests for decoupled Vercel frontend + Render backend."""
+    origin = request.headers.get("Origin", "*")
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = (
+        "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+    )
+    return response
+
+
+@app.route("/api/<path:path>", methods=["OPTIONS"])
+def api_options_handler(path):
+    """Responds to browser preflight requests immediately."""
+    return "", 204
+
+
+# --------------------------------------------------------------------------
+# Active Dataset Management
+# --------------------------------------------------------------------------
+def get_active_dataframe() -> Tuple[pd.DataFrame, str, bool]:
+    """
+    Returns the active DataFrame, its name, and whether it is synthetic simulation.
+    Checks in-memory cache, then /tmp, and falls back to baseline demo data.
+    """
+    global _ACTIVE_DATAFRAME, _ACTIVE_DATASET_NAME, _IS_SYNTHETIC
+
+    if _ACTIVE_DATAFRAME is not None and not _ACTIVE_DATAFRAME.empty:
+        return _ACTIVE_DATAFRAME, _ACTIVE_DATASET_NAME, _IS_SYNTHETIC
+
+    if ACTIVE_UPLOADED_CSV.exists():
         try:
-            with open(ACTIVE_DATASET_CONFIG, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                active_path = Path(data.get("path", ""))
-                if active_path.exists():
-                    return active_path
+            df = pd.read_csv(ACTIVE_UPLOADED_CSV)
+            cleaned_df, report = validate_and_clean_dataset(df)
+            _ACTIVE_DATAFRAME = cleaned_df
+            _ACTIVE_DATASET_NAME = ACTIVE_UPLOADED_CSV.name
+            _IS_SYNTHETIC = False
+            return _ACTIVE_DATAFRAME, _ACTIVE_DATASET_NAME, _IS_SYNTHETIC
         except Exception:
             pass
-    return ensure_demo_dataset()
 
-
-def set_active_dataset_path(path: Path, is_synthetic: bool = False, original_name: str = ""):
-    """Updates the record of the currently active dataset."""
-    with open(ACTIVE_DATASET_CONFIG, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "path": str(path.resolve()),
-                "is_synthetic": is_synthetic,
-                "original_name": original_name or path.name,
-            },
-            f,
-            indent=2,
-        )
+    demo_path = ensure_demo_dataset()
+    try:
+        raw_df = pd.read_csv(demo_path)
+        cleaned_df, report = validate_and_clean_dataset(raw_df)
+        _ACTIVE_DATAFRAME = cleaned_df
+        _ACTIVE_DATASET_NAME = demo_path.name
+        _IS_SYNTHETIC = True
+        return _ACTIVE_DATAFRAME, _ACTIVE_DATASET_NAME, _IS_SYNTHETIC
+    except Exception as exc:
+        app.logger.warning("Error loading demo dataset: %s", exc)
+        empty_df = pd.DataFrame()
+        return empty_df, "None", True
 
 
 def allowed_file(filename: str) -> bool:
@@ -90,33 +131,32 @@ def allowed_file(filename: str) -> bool:
 # --------------------------------------------------------------------------
 # Page Routes
 # --------------------------------------------------------------------------
-
 @app.get("/")
 def index():
-    active_path = get_active_dataset_path()
-    is_synthetic = active_path.name == DEFAULT_DEMO_PATH.name
+    _, dataset_name, is_synthetic = get_active_dataframe()
+    api_base_url = os.environ.get("API_BASE_URL", "").rstrip("/")
     return render_template(
         "index.html",
         model_ready=predictor.is_ready,
         is_synthetic=is_synthetic,
         tariff=TARIFF_INR_PER_KWH,
+        api_base_url=api_base_url,
     )
 
 
 # --------------------------------------------------------------------------
 # REST API Endpoints
 # --------------------------------------------------------------------------
-
 @app.get("/api/health")
 def health():
-    active_path = get_active_dataset_path()
+    _, dataset_name, is_synthetic = get_active_dataframe()
     return jsonify({
         "status": "healthy",
         "service": "WattWise Smart Energy AI",
         "version": "1.0.0",
         "model_ready": predictor.is_ready,
-        "active_dataset": active_path.name,
-        "is_synthetic": active_path.name == DEFAULT_DEMO_PATH.name,
+        "active_dataset": dataset_name,
+        "is_synthetic": is_synthetic,
         "tariff_per_kwh_inr": TARIFF_INR_PER_KWH,
     })
 
@@ -126,7 +166,7 @@ def model_info():
     if not predictor.is_ready:
         return jsonify({
             "status": "not_ready",
-            "message": "Machine learning model has not been trained yet. Call POST /api/train or trigger training in the dashboard.",
+            "message": "Machine learning model has not been trained or loaded yet. Call POST /api/train or trigger training in the dashboard.",
         }), 503
     return jsonify(predictor.get_info())
 
@@ -134,7 +174,9 @@ def model_info():
 @app.get("/api/metrics")
 def get_metrics():
     if not predictor.is_ready:
-        return jsonify({"error": "Model bundle not loaded. Please train the model."}), 503
+        return jsonify({
+            "error": "Machine learning model bundle not found. Please train the model using 'Train AI Model' or upload a custom CSV dataset."
+        }), 503
 
     bundle = predictor.bundle
     return jsonify({
@@ -175,6 +217,8 @@ def predict_energy():
         return jsonify(prediction_result)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 422
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
     except Exception as exc:
         app.logger.exception("Prediction failed")
         return jsonify({"error": f"Internal prediction error: {str(exc)}"}), 500
@@ -182,6 +226,13 @@ def predict_energy():
 
 @app.post("/api/upload")
 def upload_dataset():
+    """
+    Handles CSV dataset upload with direct in-memory Pandas processing.
+    Validates required columns, parses timestamps, handles duplicates,
+    negative values, and missing values without touching read-only paths.
+    """
+    global _ACTIVE_DATAFRAME, _ACTIVE_DATASET_NAME, _ACTIVE_VALIDATION_REPORT, _IS_SYNTHETIC
+
     if "file" not in request.files:
         return jsonify({"error": "No file part in request. Please upload a CSV file."}), 400
 
@@ -190,71 +241,100 @@ def upload_dataset():
         return jsonify({"error": "No file was selected for upload."}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({"error": "Unsupported file format. Please upload a CSV file (.csv)."}), 400
+        return jsonify({"error": "Unsupported file format. Please upload a valid CSV file (.csv)."}), 400
 
-    orig_name = secure_filename(file.filename)
-    unique_name = f"{uuid.uuid4().hex}_{orig_name}"
-    saved_path = UPLOAD_DIR / unique_name
+    orig_name = secure_filename(file.filename) or "uploaded_dataset.csv"
 
+    # Read uploaded bytes directly in memory to avoid saving to read-only directories
     try:
-        file.save(saved_path)
-
-        # Inspect and validate CSV
-        try:
-            df = pd.read_csv(saved_path)
-        except Exception as e:
-            return jsonify({"error": f"Failed to parse CSV file: {str(e)}"}), 422
-
-        # Validate headers & clean
-        try:
-            cleaned_df = parse_and_clean_data(df)
-        except ValueError as ve:
-            return jsonify({
-                "error": str(ve),
-                "details": "Ensure your CSV has 'timestamp' and 'energy_kwh' columns and at least 50 valid chronological records."
-            }), 422
-
-        # Record as active dataset
-        set_active_dataset_path(saved_path, is_synthetic=False, original_name=orig_name)
-
-        # Build preview of first 5 rows and summary statistics
-        preview_rows = cleaned_df.head(5).to_dict(orient="records")
-        for row in preview_rows:
-            if "timestamp" in row and hasattr(row["timestamp"], "strftime"):
-                row["timestamp"] = row["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
-
-        summary = {
-            "total_records": len(cleaned_df),
-            "start_time": str(cleaned_df["timestamp"].min()),
-            "end_time": str(cleaned_df["timestamp"].max()),
-            "mean_energy_kwh": round(float(cleaned_df["energy_kwh"].mean()), 2),
-            "min_energy_kwh": round(float(cleaned_df["energy_kwh"].min()), 2),
-            "max_energy_kwh": round(float(cleaned_df["energy_kwh"].max()), 2),
-            "has_temperature": "temperature" in df.columns,
-            "has_humidity": "humidity" in df.columns,
-            "has_occupancy": "occupancy" in df.columns,
-        }
-
-        return jsonify({
-            "message": "Dataset successfully uploaded and validated.",
-            "filename": orig_name,
-            "summary": summary,
-            "preview": preview_rows,
-            "columns": list(cleaned_df.columns),
-        })
-
+        file_bytes = file.read()
     except Exception as exc:
-        app.logger.exception("Upload handling error")
-        return jsonify({"error": f"Unexpected error processing upload: {str(exc)}"}), 500
+        return jsonify({"error": f"Failed to read uploaded file: {str(exc)}"}), 400
+
+    if not file_bytes:
+        return jsonify({"error": "Uploaded file is empty (0 bytes)."}), 400
+
+    # 1. Parse CSV in-memory with Pandas
+    try:
+        try:
+            df = pd.read_csv(io.BytesIO(file_bytes))
+        except UnicodeDecodeError:
+            df = pd.read_csv(io.BytesIO(file_bytes), encoding="latin1")
+    except Exception as e:
+        return jsonify({"error": f"Failed to parse CSV format: {str(e)}"}), 422
+
+    # 2. Validate schema, timestamps, positive energy, and clean dataset
+    try:
+        cleaned_df, report = validate_and_clean_dataset(df)
+    except ValueError as ve:
+        return jsonify({
+            "error": str(ve),
+            "details": "Ensure your CSV has 'timestamp' (e.g. YYYY-MM-DD HH:MM:SS) and 'energy_kwh' (non-negative float) columns and at least 24 valid records.",
+        }), 422
+    except Exception as ge:
+        return jsonify({"error": f"Validation failed: {str(ge)}"}), 422
+
+    # 3. Store active dataset in memory (ephemeral/serverless safe)
+    _ACTIVE_DATAFRAME = cleaned_df
+    _ACTIVE_DATASET_NAME = orig_name
+    _ACTIVE_VALIDATION_REPORT = report
+    _IS_SYNTHETIC = False
+
+    # 4. Safely persist to writable /tmp for multi-request reuse
+    try:
+        cleaned_df.to_csv(ACTIVE_UPLOADED_CSV, index=False)
+    except (OSError, PermissionError) as exc:
+        app.logger.warning("Could not persist active dataset to /tmp: %s", exc)
+
+    # 5. Build preview of first 5 rows
+    preview_rows = cleaned_df.head(5).to_dict(orient="records")
+    for row in preview_rows:
+        if "timestamp" in row and hasattr(row["timestamp"], "strftime"):
+            row["timestamp"] = row["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+
+    summary = {
+        "total_records": len(cleaned_df),
+        "start_time": report["start_time"],
+        "end_time": report["end_time"],
+        "mean_energy_kwh": report["mean_energy_kwh"],
+        "min_energy_kwh": report["min_energy_kwh"],
+        "max_energy_kwh": report["max_energy_kwh"],
+        "has_temperature": report["has_temperature"],
+        "has_humidity": report["has_humidity"],
+        "has_occupancy": report["has_occupancy"],
+        "validation_report": report,
+    }
+
+    return jsonify({
+        "message": "Dataset successfully uploaded, validated, and loaded into active memory.",
+        "filename": orig_name,
+        "summary": summary,
+        "preview": preview_rows,
+        "columns": list(cleaned_df.columns),
+    })
 
 
 @app.post("/api/train")
 def train_models():
-    """Triggers model training on the currently active dataset."""
-    active_path = get_active_dataset_path()
+    """
+    Triggers chronological model training and automated model selection
+    on the currently active dataset (supports in-memory DataFrame).
+    """
+    global _ACTIVE_DATAFRAME, _ACTIVE_DATASET_NAME, _IS_SYNTHETIC
+
     try:
-        bundle = train_pipeline(csv_path=active_path)
-        predictor.reload_model = predictor.load_model()
+        if _ACTIVE_DATAFRAME is not None and not _ACTIVE_DATAFRAME.empty:
+            training_input = _ACTIVE_DATAFRAME
+        elif ACTIVE_UPLOADED_CSV.exists():
+            training_input = ACTIVE_UPLOADED_CSV
+        else:
+            training_input = ensure_demo_dataset()
+
+        # Run complete ML training pipeline
+        bundle = train_pipeline(data_input=training_input)
+
+        # Update in-memory predictor immediately
+        predictor.set_bundle(bundle)
 
         return jsonify({
             "message": "Models successfully trained and evaluated.",
@@ -271,13 +351,24 @@ def train_models():
 
 @app.post("/api/reset-demo")
 def reset_demo():
-    """Resets the active dataset to the default synthetic smart building demo dataset and retrains."""
+    """Resets the active dataset back to the default synthetic smart building demo dataset."""
+    global _ACTIVE_DATAFRAME, _ACTIVE_DATASET_NAME, _ACTIVE_VALIDATION_REPORT, _IS_SYNTHETIC
+
     demo_path = ensure_demo_dataset()
-    set_active_dataset_path(demo_path, is_synthetic=True, original_name="demo_smart_building_energy.csv")
+    _ACTIVE_DATAFRAME = None
+    _ACTIVE_DATASET_NAME = demo_path.name
+    _ACTIVE_VALIDATION_REPORT = None
+    _IS_SYNTHETIC = True
+
+    if ACTIVE_UPLOADED_CSV.exists():
+        try:
+            ACTIVE_UPLOADED_CSV.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     try:
-        bundle = train_pipeline(csv_path=demo_path)
-        predictor.load_model()
+        bundle = train_pipeline(data_input=demo_path)
+        predictor.set_bundle(bundle)
         return jsonify({
             "message": "Reset to synthetic smart building demo dataset completed.",
             "best_model_name": bundle["best_model_name"],
@@ -300,12 +391,9 @@ def get_analytics():
     - Actual vs Predicted (from test evaluation)
     - Distribution histogram bins
     """
-    active_path = get_active_dataset_path()
-    try:
-        raw_df = pd.read_csv(active_path)
-        df = parse_and_clean_data(raw_df)
-    except Exception as exc:
-        return jsonify({"error": f"Could not read active dataset: {str(exc)}"}), 500
+    df, dataset_name, is_synthetic = get_active_dataframe()
+    if df.empty:
+        return jsonify({"error": "No active dataset available."}), 500
 
     # 1. Metric Cards calculations
     current_kwh = round(float(df["energy_kwh"].iloc[-1]), 2)
@@ -381,8 +469,8 @@ def get_analytics():
             "predicted_next_kwh": predicted_next_kwh,
             "average_daily_kwh": avg_daily_kwh,
             "estimated_daily_cost_inr": estimated_daily_cost_inr,
-            "is_synthetic": active_path.name == DEFAULT_DEMO_PATH.name,
-            "dataset_name": active_path.name,
+            "is_synthetic": is_synthetic,
+            "dataset_name": dataset_name,
             "total_records": len(df),
         },
         "hourly": hourly_data,
@@ -409,7 +497,6 @@ def server_error(_error):
 
 
 if __name__ == "__main__":
-    # Ensure demo data and trained model exist before starting
     ensure_demo_dataset()
     if not predictor.is_ready:
         print("[WattWise] Initializing baseline model...")
@@ -417,7 +504,6 @@ if __name__ == "__main__":
         predictor.load_model()
 
     port = int(os.environ.get("PORT", 5000))
-    # Debug is False by default for security & production compatibility
     debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() in ["true", "1"]
     print(f"[WattWise] Server starting on http://127.0.0.1:{port}")
     app.run(host="0.0.0.0", port=port, debug=debug_mode)

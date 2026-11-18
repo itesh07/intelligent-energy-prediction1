@@ -12,6 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const chartInstances = {};
   let currentUploadedFile = null;
 
+  // Resolves backend API URL (supports local single-origin, Vercel proxy, or decoupled Render URL)
+  const API_BASE = (
+    document.querySelector('meta[name="api-base-url"]')?.getAttribute('content') ||
+    window.WATTWISE_API_URL ||
+    localStorage.getItem('WATTWISE_API_URL') ||
+    ''
+  ).replace(/\/+$/, '');
+
   // ------------------------------------------------------------------------
   // DOM Element Selectors
   // ------------------------------------------------------------------------
@@ -526,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ------------------------------------------------------------------------
   async function loadAnalytics() {
     try {
-      const res = await fetch('/api/analytics');
+      const res = await fetch(`${API_BASE}/api/analytics`);
       if (!res.ok) throw new Error('Analytics API failed');
       const data = await res.json();
 
@@ -572,7 +580,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadModelMetrics() {
     try {
-      const res = await fetch('/api/metrics');
+      const res = await fetch(`${API_BASE}/api/metrics`);
       if (!res.ok) return;
       const data = await res.json();
 
@@ -614,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function checkHealth() {
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(`${API_BASE}/api/health`);
       if (res.ok) {
         const data = await res.json();
         if (systemStatusText) {
@@ -655,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btnPredict.disabled = true;
 
       try {
-        const response = await fetch('/api/predict', {
+        const response = await fetch(`${API_BASE}/api/predict`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -789,14 +797,16 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('uploadLoadingMsg').textContent = 'Parsing timestamps and verifying column schema.';
 
       try {
-        const response = await fetch('/api/upload', {
+        const response = await fetch(`${API_BASE}/api/upload`, {
           method: 'POST',
           body: formData,
         });
 
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data.error || 'Upload failed');
+          const err = new Error(data.error || 'Upload failed');
+          err.details = data.details || '';
+          throw err;
         }
 
         // Render Preview Table & Statistics
@@ -832,6 +842,10 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadAnalytics();
       } catch (err) {
         document.getElementById('uploadErrorMessage').textContent = err.message;
+        const detailsEl = document.getElementById('uploadErrorDetails');
+        if (detailsEl) {
+          detailsEl.textContent = err.details || '';
+        }
         setUploadView('error');
         uploadStateBadge.innerHTML = '<i></i> ERROR';
         uploadStateBadge.classList.remove('active');
@@ -851,7 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'Fitting Linear Regression, Random Forest, and Gradient Boosting on chronological splits…';
 
       try {
-        const res = await fetch('/api/train', { method: 'POST' });
+        const res = await fetch(`${API_BASE}/api/train`, { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Training failed');
 
@@ -874,7 +888,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function handleResetDemo() {
     if (!confirm('Reset back to the default synthetic smart building demo dataset?')) return;
     try {
-      const res = await fetch('/api/reset-demo', { method: 'POST' });
+      const res = await fetch(`${API_BASE}/api/reset-demo`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Reset failed');
       alert('Reset to demo dataset completed.');
