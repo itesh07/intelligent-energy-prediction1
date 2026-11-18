@@ -222,41 +222,28 @@ Open your browser at `http://127.0.0.1:5000`.
 
 ---
 
-## 8. GitHub and Render Deployment Guide
+## 8. Deployment Guide (Vercel & Render)
 
-### A. Pushing to GitHub
+### A. Repository Reference
+The project repository is hosted at:
 ```bash
-# Initialize git repository
-git init
-
-# Add remote repository
-git remote add origin https://github.com/YOUR_USERNAME/intelligent-energy-prediction.git
-
-# Stage files (verified by .gitignore to exclude virtualenvs and temporary uploads)
-git add .
-
-# Commit
-git commit -m "Initial release: WattWise Smart Energy AI Prediction System"
-
-# Push to main branch
-git branch -M main
-git push -u origin main
+https://github.com/itesh07/intelligent-energy-prediction1
 ```
 
-### B. Deploying to Render
-1. Create a free account on [Render](https://render.com/).
-2. On your Render Dashboard, click **New +** and select **Web Service**.
-3. Connect your GitHub repository: `intelligent-energy-prediction`.
-4. Configure service settings:
-   - **Name:** `wattwise-energy-prediction`
-   - **Environment:** `Python`
-   - **Region:** Any (e.g. `Oregon (US West)`)
-   - **Branch:** `main`
+### B. Deploying to Vercel
+The project includes ready-to-use configuration for Vercel deployment (`vercel.json` and `api/index.py`):
+1. Import the repository in [Vercel](https://vercel.com).
+2. The project will automatically detect `vercel.json` and deploy the Python serverless function via `@vercel/python`.
+3. The application parses uploaded CSVs directly in memory with Pandas and uses `/tmp` for any temporary artifacts, completely avoiding `[Errno 30] Read-only file system` errors.
+
+### C. Persistent Backend (Render) & Decoupled Architecture
+Because heavy multi-model training (100-tree Random Forest + 120-tree Gradient Boosting) benefits from persistent memory and longer execution limits, you can also deploy the backend on Render while keeping the frontend on Vercel:
+1. Deploy the backend on [Render](https://render.com) using `render.yaml` or Web Service:
    - **Build Command:** `pip install -r requirements.txt && python train_model.py`
    - **Start Command:** `gunicorn app:app --bind 0.0.0.0:$PORT`
-   - **Instance Type:** `Free`
-5. Click **Create Web Service**.
-6. Render will automatically build the environment, execute `train_model.py` to create the baseline model bundle, and bind Gunicorn to the dynamic `$PORT`.
+2. Connect your Vercel frontend to the Render backend by setting the environment variable in Vercel:
+   - `API_BASE_URL` = `https://your-wattwise-service.onrender.com`
+3. Built-in CORS headers and preflight handling automatically enable cross-origin communication between the Vercel frontend and Render backend.
 
 ---
 
