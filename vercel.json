@@ -1,10 +1,23 @@
 {
   "functions": {
     "api/index.py": {
-      "includeFiles": "templates/**,static/**,public/**,data/**,models/**"
+      "maxDuration": 60,
+      "includeFiles": "templates/**,static/**,data/**,models/**"
     }
   },
   "rewrites": [
+    {
+      "source": "/static/css/:file",
+      "destination": "/public/static/css/:file"
+    },
+    {
+      "source": "/static/js/:file",
+      "destination": "/public/static/js/:file"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index.py"
+    },
     {
       "source": "/(.*)",
       "destination": "/api/index.py"
