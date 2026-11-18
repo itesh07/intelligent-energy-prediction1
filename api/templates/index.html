@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="WattWise — Intelligent Energy Consumption Prediction System for Smart Buildings powered by Machine Learning." />
+  <meta name="api-base-url" content="{{ api_base_url or '' }}" />
+  <title>WattWise — Intelligent Energy Consumption Prediction System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <!-- Chart.js CDN for interactive energy telemetry charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- Ambient glowing background shapes -->
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <div class="ambient ambient-three"></div>
+
+  <!-- Top Navigation Bar -->
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="WattWise Home">
+      <span class="brand-mark">
+        <span></span><span></span><span></span><span></span>
+      </span>
+      <span>WATTWISE <small>SMART ENERGY AI</small></span>
+    </a>
+    <nav class="nav-links">
+      <a class="nav-link active" href="#top">Home</a>
+      <a class="nav-link" href="#dashboard">Dashboard</a>
+      <a class="nav-link" href="#predict">Predict Energy</a>
+      <a class="nav-link" href="#analytics">Analytics</a>
+      <a class="nav-link" href="#upload">Upload Data</a>
+      <a class="nav-link" href="#models">ML Models</a>
+      <a class="nav-link" href="#how-it-works">How It Works</a>
+      <a class="nav-link" href="#about">About</a>
+    </nav>
+    <div class="status-pill" id="systemStatusPill">
+      <span class="status-dot"></span>
+      <span id="systemStatusText">SYSTEM ACTIVE</span>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero Section -->
+    <section class="hero" id="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">
+          <span class="eyebrow-line"></span> SMART GRID & IOT LOAD FORECASTING
+        </div>
+        <h1>Intelligent Energy Consumption <span>Prediction</span></h1>
+        <p class="hero-text">
+          Predict future electricity demand using machine learning and make smart buildings more energy efficient.
+          Leverages chronological multi-model validation without future data leakage.
+        </p>
+        <div class="hero-actions">
+          <a href="#dashboard" class="btn btn-primary">
+            <span>Explore Dashboard</span>
+            <span class="btn-arrow">↗</span>
+          </a>
+          <a href="#predict" class="btn btn-secondary">
+            <span>Start Prediction</span>
+            <span class="btn-icon">⚡</span>
+          </a>
+        </div>
+        <div class="hero-meta">
+          <span><i class="meta-icon">✦</i> Multi-Model ML Ensemble</span>
+          <span><i class="meta-icon">◈</i> Chronological Train-Test Split</span>
+          <span><i class="meta-icon">⌁</i> Time-Series Lag Engineering</span>
+        </div>
+      </div>
+
+      <!-- Animated Smart Building Energy Visualization Art -->
+      <div class="hero-art" aria-hidden="true">
+        <div class="building-card">
+          <div class="building-top">
+            <span class="scan-tag">SMART FACILITY TELEMETRY</span>
+            <span class="scan-live"><i></i> LIVE GRID SYNC</span>
+          </div>
+          
+          <div class="building-grid">
+            <div class="building-isometric">
+              <!-- Smart Building Floor Tiers -->
+              <div class="floor-level floor-6">
+                <span class="floor-label">L6 · Central HVAC / Chillers</span>
+                <span class="floor-badge">24.2 kW</span>
+                <div class="floor-pulse"></div>
+              </div>
+              <div class="floor-level floor-5">
+                <span class="floor-label">L5 · Server Room & Data Center</span>
+                <span class="floor-badge">18.5 kW</span>
+              </div>
+              <div class="floor-level floor-4">
+                <span class="floor-label">L4 · Executive Suites & Labs</span>
+                <span class="floor-badge">12.1 kW</span>
+              </div>
+              <div class="floor-level floor-3">
+                <span class="floor-label">L3 · Workspaces & Open Office</span>
+                <span class="floor-badge">15.4 kW</span>
+              </div>
+              <div class="floor-level floor-2">
+                <span class="floor-label">L2 · Conference & Cafeteria</span>
+                <span class="floor-badge">9.8 kW</span>
+              </div>
+              <div class="floor-level floor-1">
+                <span class="floor-label">L1 · Main Lobby & EV Chargers</span>
+                <span class="floor-badge">7.4 kW</span>
+              </div>
+
+              <!-- Animated Scan Beam -->
+              <div class="scan-beam"></div>
+            </div>
+
+            <div class="art-side">
+              <div class="wave-bars">
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <span>GRID SIGNAL</span>
+              <strong>AI / LOAD</strong>
+            </div>
+          </div>
+
+          <div class="building-bottom">
+            <span>PEAK DEMAND CONTROL</span>
+            <span>OPTIMAL · TARIFF ₹{{ tariff }}/kWh</span>
+          </div>
+        </div>
+
+        <div class="float-chip chip-top">
+          <span class="chip-symbol">⚡</span>
+          <span>SMART BUILDING<br><b>POWER MONITOR</b></span>
+        </div>
+        <div class="float-chip chip-bottom">
+          <span class="chip-symbol purple">◎</span>
+          <span>ML ACCURACY<br><b>R² &gt; 0.90</b></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Dashboard Section -->
+    <section class="dashboard-section" id="dashboard">
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> REAL-TIME TELEMETRY</div>
+          <h2>Building Energy <span>Dashboard</span></h2>
+        </div>
+        <div class="dataset-indicator-badge" id="datasetBadge">
+          <span class="dot-indicator"></span>
+          <span id="activeDatasetLabel">Active Dataset: Loading...</span>
+        </div>
+      </div>
+
+      <!-- 4 Core Metric Cards -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">CURRENT ENERGY CONSUMPTION</span>
+            <span class="metric-icon">⚡</span>
+          </div>
+          <div class="metric-body">
+            <div class="metric-value"><strong id="metricCurrentKwh">—</strong> <small>kWh</small></div>
+            <p class="metric-sub" id="metricCurrentSub">Latest recorded meter reading</p>
+          </div>
+          <div class="metric-footer">
+            <span class="metric-pill">Real Sensor Telemetry</span>
+          </div>
+        </div>
+
+        <div class="metric-card highlight">
+          <div class="metric-header">
+            <span class="metric-title">PREDICTED NEXT CONSUMPTION</span>
+            <span class="metric-icon cyan">✦</span>
+          </div>
+          <div class="metric-body">
+            <div class="metric-value"><strong id="metricPredictedKwh" class="cyan-text">—</strong> <small>kWh</small></div>
+            <p class="metric-sub" id="metricPredictedSub">AI forecast for next hour</p>
+          </div>
+          <div class="metric-footer">
+            <span class="metric-pill cyan-pill" id="selectedModelBadge">Random Forest</span>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">AVERAGE DAILY CONSUMPTION</span>
+            <span class="metric-icon">▦</span>
+          </div>
+          <div class="metric-body">
+            <div class="metric-value"><strong id="metricAvgDailyKwh">—</strong> <small>kWh/day</small></div>
+            <p class="metric-sub">Mean aggregated daily power demand</p>
+          </div>
+          <div class="metric-footer">
+            <span class="metric-pill">Daily Cumulative</span>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-title">ESTIMATED DAILY ENERGY COST</span>
+            <span class="metric-icon purple">₹</span>
+          </div>
+          <div class="metric-body">
+            <div class="metric-value"><strong id="metricCostInr" class="purple-text">—</strong> <small>INR</small></div>
+            <p class="metric-sub">Calculated @ ₹{{ tariff }} per kWh commercial rate</p>
+          </div>
+          <div class="metric-footer">
+            <span class="metric-pill purple-pill">Commercial Tariff</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dataset Notice Banner -->
+      <div class="dataset-notice-box" id="datasetNoticeBox">
+        <div class="notice-left">
+          <span class="notice-icon">ℹ</span>
+          <div>
+            <strong id="noticeTitle">Active Dataset Status</strong>
+            <p id="noticeDesc">Loaded from system memory. You can upload a custom building CSV or use the default demo.</p>
+          </div>
+        </div>
+        <div class="notice-actions">
+          <a href="#upload" class="btn-sm btn-ghost">Upload Custom CSV</a>
+          <button class="btn-sm btn-outline" id="btnResetDemo">Reset to Demo Dataset</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Energy Prediction Workspace -->
+    <section class="prediction-section" id="predict">
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> INTERACTIVE ML WORKSPACE</div>
+          <h2>Energy <span>Prediction</span> Engine</h2>
+        </div>
+        <div class="step-label"><span>LIVE</span> INFERENCE</div>
+      </div>
+
+      <div class="workspace">
+        <!-- Input Form Panel -->
+        <div class="panel form-panel">
+          <div class="panel-top">
+            <div>
+              <span class="panel-kicker">BUILDING & ENVIRONMENT PARAMETERS</span>
+              <h3>Prediction Parameters</h3>
+            </div>
+            <span class="file-type">6 INPUT FEATURES</span>
+          </div>
+
+          <form id="predictionForm" class="pred-form" onsubmit="return false;">
+            <!-- Temperature -->
+            <div class="form-group">
+              <div class="form-label-row">
+                <label for="inputTemp">Ambient Temperature (°C)</label>
+                <span class="input-val-badge" id="tempDisplay">28.0 °C</span>
+              </div>
+              <input type="range" id="inputTemp" min="15.0" max="45.0" step="0.5" value="28.0" />
+              <div class="preset-chips">
+                <button type="button" class="chip-btn" data-field="temp" data-val="19.0">19°C (Cool)</button>
+                <button type="button" class="chip-btn active" data-field="temp" data-val="28.0">28°C (Moderate)</button>
+                <button type="button" class="chip-btn" data-field="temp" data-val="38.0">38°C (Heatwave)</button>
+              </div>
+            </div>
+
+            <!-- Humidity -->
+            <div class="form-group">
+              <div class="form-label-row">
+                <label for="inputHumidity">Relative Humidity (%)</label>
+                <span class="input-val-badge" id="humidityDisplay">55 %</span>
+              </div>
+              <input type="range" id="inputHumidity" min="20" max="95" step="1" value="55" />
+            </div>
+
+            <!-- Occupancy -->
+            <div class="form-group">
+              <div class="form-label-row">
+                <label for="inputOccupancy">Building Occupancy (People)</label>
+                <span class="input-val-badge" id="occupancyDisplay">120 occupants</span>
+              </div>
+              <input type="range" id="inputOccupancy" min="0" max="300" step="5" value="120" />
+              <div class="preset-chips">
+                <button type="button" class="chip-btn" data-field="occ" data-val="10">Night (10)</button>
+                <button type="button" class="chip-btn" data-field="occ" data-val="75">Partial (75)</button>
+                <button type="button" class="chip-btn active" data-field="occ" data-val="180">Peak Workday (180)</button>
+              </div>
+            </div>
+
+            <!-- Time and Day Row -->
+            <div class="form-row-2">
+              <div class="form-group">
+                <div class="form-label-row">
+                  <label for="inputHour">Hour of Day</label>
+                  <span class="input-val-badge" id="hourDisplay">14:00 (2 PM)</span>
+                </div>
+                <input type="range" id="inputHour" min="0" max="23" step="1" value="14" />
+              </div>
+
+              <div class="form-group">
+                <label for="inputDayOfWeek">Day of Week</label>
+                <select id="inputDayOfWeek" class="form-select">
+                  <option value="0">Monday (Workday)</option>
+                  <option value="1">Tuesday (Workday)</option>
+                  <option value="2" selected>Wednesday (Workday)</option>
+                  <option value="3">Thursday (Workday)</option>
+                  <option value="4">Friday (Workday)</option>
+                  <option value="5">Saturday (Weekend)</option>
+                  <option value="6">Sunday (Weekend)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Previous Energy Consumption (Lag-1) -->
+            <div class="form-group">
+              <div class="form-label-row">
+                <label for="inputPrevEnergy">Previous Hour Consumption (kWh)</label>
+                <span class="help-text">Lag-1 feature</span>
+              </div>
+              <input type="number" id="inputPrevEnergy" class="form-input" min="5" max="300" step="0.1" value="58.4" required />
+            </div>
+
+            <button type="submit" id="btnPredict" class="btn btn-primary submit-btn">
+              <span>Predict Future Consumption</span>
+              <span class="btn-arrow">⚡</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Prediction Results Panel -->
+        <div class="panel results-panel">
+          <div class="panel-top">
+            <div>
+              <span class="panel-kicker">INFERENCE REPORT</span>
+              <h3>ML Consumption Forecast</h3>
+            </div>
+            <span class="report-state" id="reportState"><i></i> AWAITING INPUT</span>
+          </div>
+
+          <!-- Empty State -->
+          <div class="empty-state" id="predEmptyState">
+            <div class="empty-graphic">
+              <div class="empty-ring ring-one"></div>
+              <div class="empty-ring ring-two"></div>
+              <div class="empty-center">⚡</div>
+              <span class="empty-cross cross-one">+</span>
+              <span class="empty-cross cross-two">+</span>
+            </div>
+            <strong>Ready for Inference</strong>
+            <p>Adjust environmental and building parameters on the left and click "Predict Future Consumption".</p>
+          </div>
+
+          <!-- Loading State -->
+          <div class="loading-state hidden" id="predLoadingState">
+            <div class="loader"></div>
+            <strong>Computing ML Forecast</strong>
+            <p>Executing model inference and thermal degree decomposition…</p>
+          </div>
+
+          <!-- Result State -->
+          <div class="result-state hidden" id="predResultState">
+            <div class="result-header-row">
+              <div class="result-label" id="resultLoadClass">NORMAL DEMAND</div>
+              <span class="result-timestamp" id="resultTimestamp">Just now</span>
+            </div>
+
+            <div class="predicted-highlight">
+              <span class="highlight-kicker">PREDICTED ENERGY CONSUMPTION</span>
+              <div class="highlight-val">
+                <span id="resultKwhValue">00.0</span> <small>kWh</small>
+              </div>
+              <div class="delta-badge" id="resultDeltaBadge">+0.0 kWh (0%) vs previous hour</div>
+            </div>
+
+            <!-- Cost & Model Information Row -->
+            <div class="result-meta-row">
+              <div class="meta-block">
+                <span>ESTIMATED HOURLY COST</span>
+                <strong id="resultCostInr">₹0.00</strong>
+              </div>
+              <div class="meta-block">
+                <span>ACTIVE MODEL</span>
+                <strong id="resultModelName">Random Forest Regressor</strong>
+              </div>
+              <div class="meta-block">
+                <span>MODEL RMSE</span>
+                <strong id="resultModelRmse">0.00 kWh</strong>
+              </div>
+            </div>
+
+            <!-- Explainability Component Decomposition -->
+            <div class="breakdown-box">
+              <div class="breakdown-title">
+                <span>LOAD COMPONENT DECOMPOSITION (EXPLAINABLE AI)</span>
+              </div>
+              <div class="breakdown-bars">
+                <div class="breakdown-item">
+                  <div class="item-label">
+                    <span>Base Building Load</span>
+                    <strong id="valBaseLoad">— kWh</strong>
+                  </div>
+                  <div class="progress-track"><div class="progress-bar base-bar" id="barBaseLoad" style="width: 40%"></div></div>
+                </div>
+                <div class="breakdown-item">
+                  <div class="item-label">
+                    <span>HVAC Cooling / Heating Load</span>
+                    <strong id="valHvacLoad">— kWh</strong>
+                  </div>
+                  <div class="progress-track"><div class="progress-bar hvac-bar" id="barHvacLoad" style="width: 35%"></div></div>
+                </div>
+                <div class="breakdown-item">
+                  <div class="item-label">
+                    <span>Occupancy Plug Load</span>
+                    <strong id="valPlugLoad">— kWh</strong>
+                  </div>
+                  <div class="progress-track"><div class="progress-bar plug-bar" id="barPlugLoad" style="width: 25%"></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="result-disclaimer">
+              <span>⌑</span> Predictions are generated by the active scikit-learn model trained with chronological separation to prevent data leakage.
+            </div>
+          </div>
+
+          <!-- Error State -->
+          <div class="error-state hidden" id="predErrorState">
+            <div class="error-icon">!</div>
+            <strong id="predErrorTitle">Prediction Failed</strong>
+            <p id="predErrorMessage">An error occurred during inference.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Energy Consumption Analytics Charts Section -->
+    <section class="analytics-section" id="analytics">
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> DATA VISUALIZATION</div>
+          <h2>Energy Consumption <span>Analytics</span></h2>
+        </div>
+        <div class="chart-filter-pills" id="chartTabPills">
+          <button class="pill-btn active" data-view="hourly">Hourly (48h)</button>
+          <button class="pill-btn" data-view="daily">Daily Totals</button>
+          <button class="pill-btn" data-view="weekly">Weekly Pattern</button>
+          <button class="pill-btn" data-view="actualVsPred">Actual vs Predicted</button>
+          <button class="pill-btn" data-view="distribution">Distribution</button>
+        </div>
+      </div>
+
+      <!-- Chart Display Cards -->
+      <div class="charts-container">
+        <!-- 1. Hourly Consumption Line Chart -->
+        <div class="chart-card active" id="chartCardHourly">
+          <div class="chart-header">
+            <div>
+              <h3>Hourly Consumption & Temperature Trends</h3>
+              <p>Chronological 48-hour energy load profile with ambient thermal tracking.</p>
+            </div>
+            <span class="chart-badge">Line Chart</span>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="hourlyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- 2. Daily Consumption Bar Chart -->
+        <div class="chart-card" id="chartCardDaily">
+          <div class="chart-header">
+            <div>
+              <h3>Daily Aggregated Energy Consumption</h3>
+              <p>Total daily electricity usage (kWh) across recent billing periods.</p>
+            </div>
+            <span class="chart-badge">Bar Chart</span>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="dailyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- 3. Weekly Consumption Pattern Chart -->
+        <div class="chart-card" id="chartCardWeekly">
+          <div class="chart-header">
+            <div>
+              <h3>Weekly Demand Profile (Monday – Sunday)</h3>
+              <p>Highlights weekday commercial business hours vs weekend setback demand.</p>
+            </div>
+            <span class="chart-badge">Pattern Chart</span>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="weeklyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- 4. Actual vs Predicted ML Comparison Chart -->
+        <div class="chart-card" id="chartCardActualVsPred">
+          <div class="chart-header">
+            <div>
+              <h3>Actual vs Predicted Consumption (Test Set Evaluation)</h3>
+              <p>Chronological test partition ground truth overlayed with ML model predictions.</p>
+            </div>
+            <span class="chart-badge cyan-pill">ML Validation</span>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="actualVsPredChart"></canvas>
+          </div>
+        </div>
+
+        <!-- 5. Energy Consumption Distribution Chart -->
+        <div class="chart-card" id="chartCardDistribution">
+          <div class="chart-header">
+            <div>
+              <h3>Energy Consumption Distribution (Histogram)</h3>
+              <p>Frequency distribution of power consumption intervals across the dataset.</p>
+            </div>
+            <span class="chart-badge">Frequency Bins</span>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="distributionChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CSV Dataset Upload Section -->
+    <section class="upload-section" id="upload">
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> DATA MANAGEMENT</div>
+          <h2>CSV Dataset <span>Upload</span> & Training</h2>
+        </div>
+        <div class="step-label"><span>CUSTOM</span> DATASET</div>
+      </div>
+
+      <div class="workspace">
+        <!-- Upload Control Panel -->
+        <div class="panel upload-panel">
+          <div class="panel-top">
+            <div>
+              <span class="panel-kicker">CUSTOM DATA INGESTION</span>
+              <h3>Upload Energy CSV</h3>
+            </div>
+            <span class="file-type">CSV FORMAT</span>
+          </div>
+
+          <label class="dropzone" id="csvDropzone" for="csvFileInput">
+            <input type="file" id="csvFileInput" accept=".csv" />
+            <span class="upload-icon">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 15.5v3A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <strong>Drop your energy CSV here</strong>
+            <span class="drop-sub">or <em>browse files</em> from your computer</span>
+            <span class="drop-note">Required: timestamp, energy_kwh · Max size: 25 MB</span>
+          </label>
+
+          <!-- Selected File View -->
+          <div class="selected-file hidden" id="csvSelectedFile">
+            <span class="file-badge">CSV</span>
+            <div class="file-info">
+              <strong id="csvFileName">dataset.csv</strong>
+              <span id="csvFileSize">0 KB</span>
+            </div>
+            <button class="remove-file" id="csvRemoveFile" aria-label="Remove dataset">×</button>
+          </div>
+
+          <button class="btn btn-primary analyze-button" id="btnUploadCsv" disabled>
+            <span>Upload and Validate Dataset</span>
+            <span class="button-arrow">↗</span>
+          </button>
+
+          <div class="upload-hints">
+            <strong>Supported Schema:</strong>
+            <code>timestamp (YYYY-MM-DD HH:MM:SS), energy_kwh [float]</code>
+            <p>Optional columns: <code>temperature, humidity, occupancy</code></p>
+          </div>
+        </div>
+
+        <!-- Uploaded Dataset Preview & Training Panel -->
+        <div class="panel preview-panel">
+          <div class="panel-top">
+            <div>
+              <span class="panel-kicker">DATASET INSPECTION</span>
+              <h3>Dataset Preview &amp; Retraining</h3>
+            </div>
+            <span class="report-state" id="uploadStateBadge"><i></i> READY</span>
+          </div>
+
+          <div id="uploadEmptyState" class="empty-state">
+            <div class="empty-graphic">
+              <div class="empty-ring ring-one"></div>
+              <div class="empty-center">▦</div>
+            </div>
+            <strong>No Custom Upload Active</strong>
+            <p>Upload a CSV file to inspect records, preview sample rows, and retrain the 3 ML models on your own building telemetry.</p>
+          </div>
+
+          <!-- Loading Spinner during upload or retrain -->
+          <div id="uploadLoadingState" class="loading-state hidden">
+            <div class="loader"></div>
+            <strong id="uploadLoadingTitle">Processing Dataset…</strong>
+            <p id="uploadLoadingMsg">Validating columns and parsing chronological timestamps.</p>
+          </div>
+
+          <!-- Preview & Action State -->
+          <div id="uploadPreviewState" class="preview-content hidden">
+            <div class="stats-pills-row" id="statsPillsRow">
+              <div class="stat-pill"><span>Total Rows:</span> <strong id="previewRows">0</strong></div>
+              <div class="stat-pill"><span>Mean kWh:</span> <strong id="previewMean">0.0</strong></div>
+              <div class="stat-pill"><span>Min/Max:</span> <strong id="previewMinMax">0 - 0</strong></div>
+            </div>
+
+            <div class="table-scroll-container">
+              <table class="preview-table" id="previewTable">
+                <thead>
+                  <tr id="previewTableHead"></tr>
+                </thead>
+                <tbody id="previewTableBody"></tbody>
+              </table>
+            </div>
+
+            <div class="preview-actions">
+              <button class="btn btn-primary" id="btnRetrainModel">
+                <span>Train ML Models on This Data</span>
+                <span class="btn-arrow">⚡</span>
+              </button>
+              <button class="btn btn-secondary" id="btnRestoreDemoFromPreview">
+                <span>Restore Demo Dataset</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Upload Error State -->
+          <div id="uploadErrorState" class="error-state hidden">
+            <div class="error-icon">!</div>
+            <strong id="uploadErrorTitle">Validation Failed</strong>
+            <p id="uploadErrorMessage"></p>
+            <small id="uploadErrorDetails"></small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Machine Learning Model Comparison Section -->
+    <section class="models-section" id="models">
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> MODEL BENCHMARKING</div>
+          <h2>Machine Learning <span>Model Comparison</span></h2>
+        </div>
+        <div class="step-label"><span>CHRONOLOGICAL</span> EVALUATION</div>
+      </div>
+
+      <div class="model-comparison-layout">
+        <!-- Comparison Table -->
+        <div class="panel comparison-table-panel">
+          <div class="panel-top">
+            <div>
+              <span class="panel-kicker">EVALUATION METRICS</span>
+              <h3>Performance on Chronological Test Split</h3>
+            </div>
+            <span class="file-type">80/20 TIME SPLIT</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="comparison-table">
+              <thead>
+                <tr>
+                  <th>Model Algorithm</th>
+                  <th>MAE (kWh)</th>
+                  <th>RMSE (kWh)</th>
+                  <th>R² Score</th>
+                  <th>Train Time</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="modelComparisonBody">
+                <tr><td colspan="6" style="text-align:center; color:#8490a5;">Loading model benchmarks…</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="methodology-note">
+            <div class="note-bullet">◈</div>
+            <div class="note-content">
+              <strong>Strict Chronological Validation:</strong>
+              Unlike naive randomized cross-validation which causes future data to leak into the past, our pipeline strictly splits the timeline into training (earlier 80%) and testing (latest 20%) periods.
+            </div>
+          </div>
+        </div>
+
+        <!-- Models Metric Bar Chart -->
+        <div class="panel comparison-chart-panel">
+          <div class="panel-top">
+            <div>
+              <span class="panel-kicker">VISUAL BENCHMARK</span>
+              <h3>Error Metric Comparison</h3>
+            </div>
+            <span class="chart-badge">MAE vs RMSE</span>
+          </div>
+          <div class="chart-canvas-wrapper mini-canvas">
+            <canvas id="modelComparisonChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-section" id="how-it-works">
+      <div class="eyebrow"><span class="eyebrow-line"></span> END-TO-END PIPELINE</div>
+      <h2>How the AI system <span>works.</span></h2>
+      <div class="process-grid">
+        <article class="process-card">
+          <span class="process-number">01</span>
+          <div class="process-icon">▦</div>
+          <h3>Data Collection</h3>
+          <p>IoT smart meters and weather sensors stream building power telemetry, ambient temperatures, and occupancy logs.</p>
+        </article>
+
+        <article class="process-card">
+          <span class="process-number">02</span>
+          <div class="process-icon">⌘</div>
+          <h3>Data Preprocessing</h3>
+          <p>Timestamps are ordered chronologically; lag features (t-1, t-2, t-24) and rolling window moving averages are engineered.</p>
+        </article>
+
+        <article class="process-card">
+          <span class="process-number">03</span>
+          <div class="process-icon">⚡</div>
+          <h3>ML Model Training</h3>
+          <p>Linear Regression, Random Forest, and Gradient Boosting are trained and benchmarked strictly on historical partitions.</p>
+        </article>
+
+        <article class="process-card">
+          <span class="process-number">04</span>
+          <div class="process-icon">◫</div>
+          <h3>Analytics & Insights</h3>
+          <p>Predictions, thermal load decomposition, and commercial cost calculations empower building facility managers.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- About Project Section -->
+    <section class="about-section" id="about">
+      <div class="panel about-panel">
+        <div class="about-header">
+          <div class="eyebrow"><span class="eyebrow-line"></span> ACADEMIC CAPSTONE PROJECT</div>
+          <h2>About <span>WattWise AI</span></h2>
+          <p class="about-sub">
+            Intelligent Energy Consumption Prediction System for Smart Buildings — Department of Computer Science &amp; Engineering.
+          </p>
+        </div>
+
+        <div class="about-grid">
+          <!-- Student Details Card -->
+          <div class="about-card student-card">
+            <h3>Student Developers</h3>
+            <div class="student-list">
+              <div class="student-item">
+                <div class="student-avatar">IC</div>
+                <div>
+                  <strong>Itesh Choudhary</strong>
+                  <span>Registration No. 12517042</span>
+                </div>
+              </div>
+              <div class="student-item">
+                <div class="student-avatar">VM</div>
+                <div>
+                  <strong>Vivak Mishra</strong>
+                  <span>Registration No. 12516612</span>
+                </div>
+              </div>
+            </div>
+            <div class="academic-meta">
+              <div><span>Course:</span> <strong>CSE276</strong></div>
+              <div><span>University:</span> <strong>Lovely Professional University</strong></div>
+            </div>
+          </div>
+
+          <!-- Academic Scope & Ethics Card -->
+          <div class="about-card scope-card">
+            <h3>Project Scope &amp; Integrity</h3>
+            <p>
+              This application was engineered to demonstrate applied machine learning for smart building energy forecasting.
+              It uses strictly measured or synthetic benchmark datasets.
+            </p>
+            <div class="ethics-points">
+              <div class="point-item">
+                <span class="point-icon">✓</span>
+                <span><strong>No Fabricated Accuracy:</strong> Evaluation metrics are calculated live using actual scikit-learn cross-validation.</span>
+              </div>
+              <div class="point-item">
+                <span class="point-icon">✓</span>
+                <span><strong>Transparency:</strong> Clearly distinguishes between synthetic simulation demo datasets and real building telemetry.</span>
+              </div>
+              <div class="point-item">
+                <span class="point-icon">✓</span>
+                <span><strong>Honest Insights:</strong> The system predicts load demand and does not falsely claim automated physical savings.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <a class="brand footer-brand" href="#top">
+        <span class="brand-mark"><span></span><span></span><span></span><span></span></span>
+        <span>WATTWISE <small>SMART ENERGY AI</small></span>
+      </a>
+      <span>WATTWISE <i>·</i> CSE276 CAPSTONE <i>·</i> LOVELY PROFESSIONAL UNIVERSITY</span>
+      <a href="#top" class="back-to-top">BACK TO TOP ↑</a>
+    </footer>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -24,7 +24,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 from werkzeug.utils import secure_filename
 
 from prediction import EnergyPredictor, TARIFF_INR_PER_KWH
@@ -51,7 +51,21 @@ ACTIVE_UPLOADED_CSV = TEMP_DIR / "wattwise_active_dataset.csv"
 ALLOWED_EXTENSIONS = {".csv"}
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
 
-app = Flask(__name__)
+# Resolve template directories across root, api/ and Vercel Lambda /var/task
+candidate_template_dirs = [
+    BASE_DIR / "templates",
+    BASE_DIR / "api" / "templates",
+    Path(__file__).resolve().parent / "templates",
+    Path("/var/task/templates"),
+    Path("/var/task/api/templates"),
+]
+active_template_dir = str(next((d for d in candidate_template_dirs if d.is_dir()), BASE_DIR / "templates"))
+
+app = Flask(
+    __name__,
+    template_folder=active_template_dir,
+    static_folder=str(BASE_DIR / "static"),
+)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 # In-memory session state for active uploaded dataset (serverless-friendly)
@@ -62,6 +76,28 @@ _IS_SYNTHETIC: bool = True
 
 # Initialize predictor
 predictor = EnergyPredictor(bundle_path=resolve_model_bundle_path())
+
+
+# --------------------------------------------------------------------------
+# Static Assets Serving (Fallbacks for Vercel Serverless & CDN)
+# --------------------------------------------------------------------------
+@app.route("/static/<path:filename>")
+def serve_static_asset(filename):
+    """Guarantees static assets are served properly in all serverless environments."""
+    search_dirs = [
+        BASE_DIR / "public" / "static",
+        BASE_DIR / "static",
+        Path(__file__).resolve().parent / "public" / "static",
+        Path(__file__).resolve().parent / "static",
+        Path(__file__).resolve().parent.parent / "static",
+        Path("/var/task/public/static"),
+        Path("/var/task/static"),
+    ]
+    for directory in search_dirs:
+        candidate_file = directory / filename
+        if candidate_file.is_file():
+            return send_from_directory(directory, filename)
+    return jsonify({"error": f"Static file '{filename}' not found."}), 404
 
 
 # --------------------------------------------------------------------------
