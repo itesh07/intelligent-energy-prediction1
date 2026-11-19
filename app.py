@@ -79,11 +79,11 @@ predictor = EnergyPredictor(bundle_path=resolve_model_bundle_path())
 
 
 # --------------------------------------------------------------------------
-# Static Assets Serving (Fallbacks for Vercel Serverless & CDN)
+# Static Assets Serving (Fallbacks for Vercel Serverless & CDN + localhost)
 # --------------------------------------------------------------------------
 @app.route("/static/<path:filename>")
 def serve_static_asset(filename):
-    """Guarantees static assets are served properly in all serverless environments."""
+    """Serves static assets from multiple fallback locations."""
     search_dirs = [
         BASE_DIR / "public" / "static",
         BASE_DIR / "static",
@@ -96,8 +96,38 @@ def serve_static_asset(filename):
     for directory in search_dirs:
         candidate_file = directory / filename
         if candidate_file.is_file():
-            return send_from_directory(directory, filename)
+            return send_from_directory(str(directory), filename)
     return jsonify({"error": f"Static file '{filename}' not found."}), 404
+
+
+@app.route("/css/<path:filename>")
+def serve_css(filename):
+    """Serves CSS from public/css/ — matches Vercel CDN path /css/<file>."""
+    search_dirs = [
+        BASE_DIR / "public" / "css",
+        BASE_DIR / "static" / "css",
+        Path("/var/task/public/css"),
+    ]
+    for directory in search_dirs:
+        candidate = directory / filename
+        if candidate.is_file():
+            return send_from_directory(str(directory), filename)
+    return jsonify({"error": f"CSS file '{filename}' not found."}), 404
+
+
+@app.route("/js/<path:filename>")
+def serve_js(filename):
+    """Serves JS from public/js/ — matches Vercel CDN path /js/<file>."""
+    search_dirs = [
+        BASE_DIR / "public" / "js",
+        BASE_DIR / "static" / "js",
+        Path("/var/task/public/js"),
+    ]
+    for directory in search_dirs:
+        candidate = directory / filename
+        if candidate.is_file():
+            return send_from_directory(str(directory), filename)
+    return jsonify({"error": f"JS file '{filename}' not found."}), 404
 
 
 # --------------------------------------------------------------------------
